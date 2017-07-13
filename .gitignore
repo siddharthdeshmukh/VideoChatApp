@@ -1,7 +1,7 @@
-# Dependencies
-bower_components
-node_modules
+node_modules/
+bower_components/
+*.log
 
-# Generated files
-.idea
-output
+build/
+dist/
+.idea/

@@ -17,7 +17,7 @@ conn.onmessage = function (msg) {
     console.log("Got message", msg.data);
     var data = JSON.parse(msg.data);
 
-    switch(data.type) {
+    switch (data.type) {
         case "login":
             handleLogin(data.success);
             break;
@@ -55,15 +55,15 @@ function send(message) {
     conn.send(JSON.stringify(message));
 };
 
-//******
-//UI selectors block
-//******
-
 var loginPage = document.querySelector('#loginPage');
 var usernameInput = document.querySelector('#usernameInput');
 var loginBtn = document.querySelector('#loginBtn');
 
-var callPage = document.querySelector('#callPage');
+var optionsPage = document.querySelector('#optionPage');
+var chatBtn = document.querySelector('#chatBtn');
+var videoBtn = document.querySelector('#videoCall');
+
+var callPage = document.querySelector('#chatPage');
 var callToUsernameInput = document.querySelector('#callToUsernameInput');
 var callBtn = document.querySelector('#callBtn');
 
@@ -72,9 +72,21 @@ var msgInput = document.querySelector('#msgInput');
 var sendMsgBtn = document.querySelector('#sendMsgBtn');
 
 var chatArea = document.querySelector('#chatarea');
+
+var videoPage = document.querySelector('#videoPage');
+
+var localVideo = document.querySelector('#localVideo');
+var remoteVideo = document.querySelector('#remoteVideo');
+var videoCallBtn = document.querySelector('#videoCallBtn');
+var videoHangUpBtn = document.querySelector('#videoHangUpBtn');
+var videoOtherUer = document.querySelector('#videoCallToUsername');
+var stream;
+
 var yourConn;
 var dataChannel;
 callPage.style.display = "none";
+optionsPage.style.display = "none";
+videoPage.style.display = "none";
 
 // Login when the user clicks the button
 loginBtn.addEventListener("click", function (event) {
@@ -95,82 +107,20 @@ function handleLogin(success) {
         alert("Ooops...try a different username");
     } else {
         loginPage.style.display = "none";
-        callPage.style.display = "block";
+        optionsPage.style.display = "block";
 
-        //**********************
-        //Starting a peer connection
-        //**********************
-
-        //using Google public stun server
+               //using Google public stun server
         var configuration = {
-            "iceServers": [{ "url": "stun:stun2.1.google.com:19302" }]
+            "iceServers": [{"url": "stun:stun2.1.google.com:19302"}]
         };
 
         yourConn = new RTCPeerConnection(configuration);
-
-        // Setup ice handling
-        yourConn.onicecandidate = function (event) {
-            if (event.candidate) {
-                send({
-                    type: "candidate",
-                    candidate: event.candidate
-                });
-            }
-        };
-        yourConn.ondatachannel = function(event) {
-            var receiveChannel = event.channel;
-            receiveChannel.onmessage = function(event) {
-                console.log("ondatachannel message:", event.data);
-                chatArea.innerHTML += connectedUser + ": " + event.data + "<br />";
-            };
-        };
-
-
-
-        //creating data channel
-        dataChannel = yourConn.createDataChannel("channel1", {reliable:true});
-
-        dataChannel.onerror = function (error) {
-            console.log("Ooops...error:", error);
-        };
-
-        //when we receive a message from the other peer, display it on the screen
-        dataChannel.onmessage = function (event) {
-            chatArea.innerHTML += connectedUser + ": " + event.data + "<br />";
-        };
-
-        dataChannel.onclose = function () {
-            console.log("data channel is closed");
-        };
-        dataChannel.onopen = function(event) {
-            var readyState = dataChannel.readyState;
-            if (readyState == "open") {
-                //dataChannel.send("Hello");
-            }
-        };
 
     }
 };
 
 //initiating a call
-callBtn.addEventListener("click", function () {
-    var callToUsername = callToUsernameInput.value;
-
-    if (callToUsername.length > 0) {
-        connectedUser = callToUsername;
-        // create an offer
-        yourConn.createOffer(function (offer) {
-            send({
-                type: "offer",
-                offer: offer
-            });
-            yourConn.setLocalDescription(offer);
-        }, function (error) {
-            alert("Error when creating an offer");
-        });
-    }
-
-});
+callBtn.addEventListener("click", callOtherUser);
 
 //when somebody sends us an offer
 function handleOffer(offer, name) {
@@ -201,13 +151,7 @@ function handleCandidate(candidate) {
 };
 
 //hang up
-hangUpBtn.addEventListener("click", function () {
-    send({
-        type: "leave"
-    });
-
-    handleLeave();
-});
+hangUpBtn.addEventListener("click", hangConnection);
 
 function handleLeave() {
     connectedUser = null;
@@ -229,3 +173,118 @@ sendMsgBtn.addEventListener("click", function (event) {
     }
     msgInput.value = "";
 });
+
+chatBtn.addEventListener("click", function () {
+    callPage.style.display = "block";
+    videoPage.style.display = "none";
+    yourConn.onicecandidate = function (event) {
+        if (event.candidate) {
+            send({
+                type: "candidate",
+                candidate: event.candidate
+            });
+        }
+    };
+
+    yourConn.ondatachannel = function (event) {
+        var receiveChannel = event.channel;
+        receiveChannel.onmessage = function (event) {
+            console.log("ondatachannel message:", event.data);
+            chatArea.innerHTML += connectedUser + ": " + event.data + "<br />";
+        };
+    };
+
+
+    //creating data channel
+    dataChannel = yourConn.createDataChannel("channel1", {reliable: true});
+
+    dataChannel.onerror = function (error) {
+        console.log("Ooops...error:", error);
+    };
+
+    //when we receive a message from the other peer, display it on the screen
+    dataChannel.onmessage = function (event) {
+        chatArea.innerHTML += connectedUser + ": " + event.data + "<br />";
+    };
+
+    dataChannel.onclose = function () {
+        console.log("data channel is closed");
+    };
+    dataChannel.onopen = function (event) {
+        var readyState = dataChannel.readyState;
+        if (readyState == "open") {
+            //dataChannel.send("Hello");
+        }
+    };
+});
+videoBtn.addEventListener("click", function () {
+    callPage.style.display = "none";
+    videoPage.style.display = "block";
+    //getting local Video stream
+    navigator.mediaDevices.getUserMedia({video: true, audio: true})
+        .then(getStream)
+        .catch(function (e) {
+            alert('getUserMedia() error: ' + e.name);
+        });
+});
+
+
+function getStream(stream) {
+
+    localVideo.srcObject = stream;
+    yourConn.addStream(stream);
+    // Add localStream to global scope so it's accessible from the browser console
+    window.localStream = localStream = stream;
+    // Setup ice handling
+    yourConn.onicecandidate = function (event) {
+        if (event.candidate) {
+            send({
+                type: "candidate",
+                candidate: event.candidate
+            });
+        }
+    };
+
+    yourConn.onaddstream = function (strm) {
+        remoteVideo.src = window.URL.createObjectURL(strm.stream);
+    };
+}
+videoCallBtn.addEventListener("click", callOtherUser);
+videoHangUpBtn.addEventListener("click", hangConnection);
+function callOtherUser(event) {
+
+    var callToUsername;
+    var chatWithOtherUser = callToUsernameInput.value;
+    var videoCallToOtherUSer = videoOtherUer.value;
+    if(chatWithOtherUser.length>0){
+        callToUsername =chatWithOtherUser;
+    }else {
+        callToUsername=videoCallToOtherUSer
+    }
+
+    if (callToUsername.length > 0) {
+
+        connectedUser = callToUsername;
+
+        // create an offer
+        yourConn.createOffer(function (offer) {
+            send({
+                type: "offer",
+                offer: offer
+            });
+
+            yourConn.setLocalDescription(offer);
+        }, function (error) {
+            alert("Error when creating an offer");
+        });
+
+    }
+};
+
+function hangConnection() {
+    send({
+        type: "leave"
+    });
+
+    handleLeave();
+}
